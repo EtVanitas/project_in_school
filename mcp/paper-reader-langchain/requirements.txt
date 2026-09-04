@@ -1,0 +1,12 @@
+# LangChain / LangGraph 核心
+langchain>=1.2
+langgraph>=1.0
+langchain-openai>=0.3
+
+# 论文获取与解析
+arxiv>=2.1
+pymupdf>=1.24
+requests>=2.31
+
+# 环境配置
+python-dotenv>=1.0
