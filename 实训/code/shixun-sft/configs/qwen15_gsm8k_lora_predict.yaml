@@ -1,0 +1,32 @@
+### model
+model_name_or_path: /root/siton-data-1f55405a64d24fe2819a81c90df30517/20260617/Qwen1.5-0.5B-Chat
+trust_remote_code: true
+
+### method
+stage: sft
+do_predict: true
+finetuning_type: lora
+adapter_name_or_path: /root/siton-tmp/20235947/shixun-sft/outputs/qwen15_gsm8k_lora_sft
+
+### dataset
+dataset_dir: /root/siton-tmp/20235947/shixun-sft/data
+eval_dataset: gsm8k_test
+template: qwen
+cutoff_len: 2048
+overwrite_cache: true
+preprocessing_num_workers: 8
+dataloader_num_workers: 2
+
+### output
+output_dir: /root/siton-tmp/20235947/shixun-sft/outputs/qwen15_gsm8k_lora_predict
+overwrite_output_dir: true
+report_to: none
+
+### generation
+per_device_eval_batch_size: 2
+predict_with_generate: true
+max_new_tokens: 512
+do_sample: false
+num_beams: 1
+fp16: true
+ddp_timeout: 180000000
