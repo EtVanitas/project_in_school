@@ -1,0 +1,53 @@
+@import "tailwindcss";
+@source not "../dist";  /* 构建产物不进源码扫描（否则 CSS 随旧产物漂移） */
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+}
+
+/* 细滚动条 */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* Markdown 渲染（对话回答 / 笔记） */
+.md { font-size: 14px; line-height: 1.7; word-break: break-word; }
+.md h1, .md h2, .md h3 { font-weight: 600; margin: 0.8em 0 0.4em; }
+.md h1 { font-size: 1.25em; }
+.md h2 { font-size: 1.15em; }
+.md h3 { font-size: 1.05em; }
+.md p { margin: 0.4em 0; }
+.md ul, .md ol { padding-left: 1.4em; margin: 0.4em 0; }
+.md ul { list-style: disc; }
+.md ol { list-style: decimal; }
+.md code {
+  background: #f1f5f9;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: Consolas, Monaco, monospace;
+}
+.md pre {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.7em;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+.md pre code { background: none; padding: 0; }
+.md blockquote {
+  border-left: 3px solid #cbd5e1;
+  padding-left: 0.8em;
+  color: #64748b;
+  margin: 0.4em 0;
+}
+.md table { border-collapse: collapse; margin: 0.5em 0; }
+.md th, .md td { border: 1px solid #e2e8f0; padding: 0.3em 0.6em; }
+.md a { color: #2563eb; text-decoration: underline; }
