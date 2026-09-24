@@ -1,6 +1,6 @@
 # 智能论文阅读助手（paper-reader-langchain）
 
-> v0.6 ｜ 本地优先的 LLM 论文阅读 Agent（面试项目）
+> v0.6 ｜ 本地优先的 LLM 论文阅读 Agent
 
 三栏网页阅读器：**LangGraph 状态图编排 + 大小模型协作（本地 Qwen3-4B / 云端 DeepSeek）+ Agentic RAG + 三层记忆（笔记合并重写 + 用户画像）**。
 
