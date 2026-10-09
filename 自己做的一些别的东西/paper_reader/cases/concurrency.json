@@ -1,0 +1,56 @@
+{
+  "meta": {
+    "suite": "concurrency",
+    "dimension": "并发与时序",
+    "desc": "测整理与问答并发、后台整理未完成时再入、同会话连续轮次序号、写锁串行等时序不变量：并发不破坏水位、seq 单调与增量隔离。status 三态：automated:<文件>.py@<用例标题> / manual:<操作指引> / gap:<说明>。",
+    "version": "v0.9",
+    "updated": "2026-10-09"
+  },
+  "cases": [
+    {
+      "id": "C01",
+      "title": "整理 vs 轮中新写入（cut 防并发）",
+      "measure": "整理切割点 cut=MAX(有效 seq)：整理开始后新写入条目 seq>cut，天然不进输入、不被删除、水位不越界",
+      "setup": { "type": "manual_env", "detail": "整理契约 T2.4（并发保留）" },
+      "expect": { "assert": ["seq>cut 的新条目保留、不进本次输入", "organized_seq 不越过 cut"] },
+      "status": "automated:test_memory_organize.py@T2.4 并发保留：整理期间新写入（seq>cut）不进输入、不被删除、水位不越界",
+      "origin": "继承 v0.9 整理契约 T2.4"
+    },
+    {
+      "id": "C02",
+      "title": "轮末后台整理未完成时用户立刻追问（organizing 再入）",
+      "measure": "同一 conv 的整理按 _organize_locks 串行；无增量再入直接 unchanged 返回、不重复整理、不触模型",
+      "setup": { "type": "temp_db", "detail": "空增量对话上 organize_conversation 再入" },
+      "expect": { "assert": ["再入返回 unchanged=True、无异常"] },
+      "status": "automated:t_lifecycle.py@整理幂等｜无增量再入 unchanged=True、水位不前推",
+      "origin": "新增（organizing 再入，离线口径）"
+    },
+    {
+      "id": "C03",
+      "title": "同 conv 连续轮次 seq 不交叠（单调不复用）",
+      "measure": "model_messages.seq 以水位为基准单调递增，清账换代后仍严格大于水位，双轮写入不交叠",
+      "setup": { "type": "temp_db", "detail": "append_model_message 连续写入 + 清账换代" },
+      "expect": { "assert": ["新 seq 恒 > 已清账水位，不复用旧 seq"] },
+      "status": "automated:t_lifecycle.py@并发轮次｜_next_seq 以整理水位为基准 seq 单调不复用",
+      "origin": "新增（序号并发隔离）"
+    },
+    {
+      "id": "C04",
+      "title": "整理幂等重跑（unchanged 口径）",
+      "measure": "已整理到水位后再跑整理，增量空→unchanged=True，笔记与水位不动",
+      "setup": { "type": "temp_db", "detail": "水位==最新 seq 时 organize_conversation" },
+      "expect": { "assert": ["unchanged=True", "note_chars / organized_seq 不变"] },
+      "status": "automated:t_lifecycle.py@整理幂等｜无增量再入 unchanged=True、水位不前推",
+      "origin": "新增（幂等重跑）"
+    },
+    {
+      "id": "C05",
+      "title": "sqlite 写锁串行（多线程 check_same_thread=False）",
+      "measure": "全库共享单连接 + 全局 threading._lock 串行化写；真实高并发下的死锁/丢写需压力测试",
+      "setup": { "type": "load", "detail": "多线程并发写 event_log / model_messages 压力测试" },
+      "expect": { "assert": ["无 'database is locked'、无丢写"] },
+      "status": "gap:契约层不模拟真多线程压力；如需可补 runners/ 下并发压测脚本（threading + 临时库断言写入总数）",
+      "origin": "新增（记录已知边界，非回归项）"
+    }
+  ]
+}

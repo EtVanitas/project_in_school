@@ -1,0 +1,83 @@
+{
+  "meta": {
+    "suite": "hallucination",
+    "dimension": "幻觉与接地",
+    "desc": "测回答是否只落在「提供的资料」上：引用页码不得越界、查无此事要承认资料不足、模型异常不编造占位。status 三态：automated:<文件>.py@<用例标题>=已被该契约用例锁定；manual:<操作指引>=真实在线探针题（verify_e2e_real，手工执行真实计费）；gap:<说明>=待补自动化。",
+    "version": "v0.9",
+    "updated": "2026-10-09"
+  },
+  "cases": [
+    {
+      "id": "H01",
+      "title": "引用越界与区间宽容（单点严格、区间 ≥50% 宽容）",
+      "measure": "verify_citations 护栏：回答提到未提供的页码必须被点名；区间引用过半在提供范围内视为概括表述放行",
+      "setup": { "type": "unit", "detail": "verify_citations 直调：单点越界 / 区间 50% 边界 / 全合法三形态" },
+      "expect": { "assert": ["『第 99 页』不在 used_pages → 出现在越界列表", "『第 5-7 页』且提供了 5/6 → 放行（≥50%）", "『第 5-7 页』仅提供 5 → 整体记越界"] },
+      "status": "automated:test_phase1_contrast.py@引用校验：越界检测与区间宽容",
+      "origin": "继承老 e2e_qa『引用页码』判分口径，升维为契约"
+    },
+    {
+      "id": "H02",
+      "title": "页码纪律与不编造立法（answer 提示词）",
+      "measure": "防幻觉的第一道闸门：SYSTEM_ANSWER 必须含「只引用实际提供的页码」「资料不足明确说明、不编造」条款",
+      "setup": { "type": "static", "detail": "prompts.SYSTEM_ANSWER 文本断言" },
+      "expect": { "assert": ["含『不得引用未提供的页码』", "含『资料不足』与『不要编造』"] },
+      "status": "automated:test_phase1_contrast.py@answer 系统提示：页码纪律与不编造约束",
+      "origin": "新增（立法侧缺口：老体系只查账不查立法）"
+    },
+    {
+      "id": "H03",
+      "title": "陈旧记忆以论文为准 + 勘误立法（agent 提示词）",
+      "measure": "记忆是自动整理的可能有误：SYSTEM_AGENT 必须含「先核实、以论文为准、flag_note_issue 提交勘误」规则",
+      "setup": { "type": "static", "detail": "prompts.SYSTEM_AGENT 文本断言" },
+      "expect": { "assert": ["工作规则第 3 条存在且含『以论文为准』『flag_note_issue』"] },
+      "status": "automated:test_phase1_contrast.py@agent 系统提示：工作规则与关键约束齐全",
+      "origin": "继承老 M02（勘误触发）的立法面"
+    },
+    {
+      "id": "H04",
+      "title": "空流轮不编造：content 为空原样结束",
+      "measure": "模型返回空内容（无 chunk 或 content 全空）时不虚构答案、不抛异常、配对不破坏",
+      "setup": { "type": "fake_llm_rounds", "detail": "脚本模型单轮空流 → run_agent" },
+      "expect": { "assert": ["事件流以 natural_stop 收口", "无 delta 虚构文本"] },
+      "status": "automated:t_grounding.py@空内容轮｜模型回空正文不编造（natural_stop、零 delta）",
+      "origin": "新增（老 G07 LLM 返回空 chunk 亦此例）"
+    },
+    {
+      "id": "H05",
+      "title": "无 usage 数据零值守卫：记账不被污染",
+      "measure": "模型未回传 usage（tokens_in=0）时不得把 last_input_tokens 写 0——否则自动整理触发判定被清零掩盖",
+      "setup": { "type": "fake_llm_rounds", "detail": "chunk 不带 usage_metadata，先造 last_input_tokens=5000" },
+      "expect": { "assert": ["note_input_tokens(0) 被守卫跳过", "run_agent 后 last_input_tokens 仍为 5000"] },
+      "status": "automated:t_grounding.py@usage 缺失｜tokens_in=0 守卫不覆盖记账",
+      "origin": "新增（老体系从未锁）"
+    },
+    {
+      "id": "H06",
+      "title": "模型调用失败转友好文本（降级不崩）",
+      "measure": "云端异常时链路以友好提示收口而非抛出/空白；observability 侧统一锁定",
+      "setup": { "type": "fake_llm_rounds", "detail": "patch get_llm 的 astream 抛 RuntimeError → run_agent 降级支路" },
+      "expect": { "assert": ["产出面向用户的提示文本", "不抛异常到调用方之外"] },
+      "status": "automated:t_grounding.py@降级友好文本｜模型调用失败转提示文本（不抛异常）",
+      "origin": "继承老 G06（手工改非法 Key）——改为离线可锁"
+    },
+    {
+      "id": "H07",
+      "title": "真实探针：查无此事不编造",
+      "measure": "真云端下问论文中不存在的概念，模型应声明资料不足而非编造页码",
+      "setup": { "type": "e2e_probe", "detail": "verify_e2e_real PLAYBOOK 幻觉题（doc=1512.03385.pdf，问不存在概念）" },
+      "expect": { "assert": ["answer 含『资料不足/未提及/没有』语义之一", "未引用凭空页码（warning 为空或已点名）"] },
+      "status": "manual:python \"test/10-测评体系/runners/verify_e2e_real.py\"（需 API Key，看 gid=H07 行与聚合 warn_rate）",
+      "origin": "继承老 e2e_qa 幻觉诱导题（E07/E08 型）"
+    },
+    {
+      "id": "H08",
+      "title": "真实探针：记忆冲突以论文为准",
+      "measure": "植入与论文矛盾的错误笔记后提问，模型应以论文为准并（可选）触发 note_issue，不照抄错误记忆",
+      "setup": { "type": "e2e_probe", "detail": "PLAYBOOK 陈旧记忆题：先写错误笔记再问对应主题" },
+      "expect": { "assert": ["answer 不照抄错误结论", "note_issues ≥ 0（触发为加分不强制）"] },
+      "status": "manual:python \"test/10-测评体系/runners/verify_e2e_real.py\"（需 API Key，看 gid=H08 行）",
+      "origin": "继承老 M02（勘误触发）"
+    }
+  ]
+}

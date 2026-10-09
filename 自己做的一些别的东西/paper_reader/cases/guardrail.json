@@ -1,0 +1,83 @@
+{
+  "meta": {
+    "suite": "guardrail",
+    "dimension": "护栏与降级",
+    "desc": "测各类上限（步数 / 工具总量 / 超长输入）触发时的强制收敛与故障降级：主循环绝不因单点异常崩溃，异常一律转结构化友好结果。status 三态：automated:<文件>.py@<用例标题>=已被该契约用例锁定；manual:<操作指引>=真实在线探针题；gap:<说明>=待补自动化。",
+    "version": "v0.9",
+    "updated": "2026-10-09"
+  },
+  "cases": [
+    {
+      "id": "G01",
+      "title": "工具总量上限（MAX_TOOL_CALLS 触发强制收敛）",
+      "measure": "单轮问答累计工具调用达 MAX_TOOL_CALLS：超限的调用只补空观测保配对（不发 tool_start），置 termination_reason=tool_limit 并跳出转强制收敛",
+      "setup": { "type": "fake_llm_rounds", "detail": "注入恒成功假工具，6 轮×2 调用把 total_calls 顶到 10" },
+      "expect": { "assert": ["tool_start/tool_end 各 10 条（超限调用不执行）", "termination reason=tool_limit"] },
+      "status": "automated:t_grounding.py@工具总量护栏｜达 MAX_TOOL_CALLS 空观测配对后强制收敛（tool_limit）",
+      "origin": "老 G01 曾标 FAIL（无 MAX_TOOL_CALLS）；常量与护栏已落地，转 automated"
+    },
+    {
+      "id": "G02",
+      "title": "检索零命中 → 均匀采样兜底",
+      "measure": "词法+向量均零命中时用 sample_chunks 按位置均匀采样保全文视野；空块输入返回 [] 不抛异常",
+      "setup": { "type": "unit", "detail": "patch retrieval.get_chunks→[] 后 sample_chunks 断言 []" },
+      "expect": { "assert": ["get_chunks 为空 → sample_chunks 返回 []", "不抛异常"] },
+      "status": "automated:t_lifecycle.py@sample_chunks 兜底｜无块 PDF 返回 []（空输入安全）",
+      "origin": "继承老 G02（零命中均匀采样兜底）"
+    },
+    {
+      "id": "G03",
+      "title": "超长输入截断（guard 节点 1000 字上限）",
+      "measure": "guard_node 折叠空白并截断至 1000 字符，防空转与超预算注入；纯空白规范化为问候语",
+      "setup": { "type": "unit", "detail": "graph.guard_node 直调：2000 字 / 纯空白" },
+      "expect": { "assert": ["超长 → question 长度 ≤ 1000", "纯空白 → '你好'"] },
+      "status": "automated:t_lifecycle.py@guard 节点｜超长截断 1000、纯空白转问候",
+      "origin": "继承老 G03（超长输入）"
+    },
+    {
+      "id": "G04",
+      "title": "步数上限强制收敛（MAX_STEPS → step_limit）",
+      "measure": "ReAct 循环耗尽 MAX_STEPS 仍未得最终答案时，置 step_limit 并走不带工具的强制收敛段作答",
+      "setup": { "type": "fake_llm_rounds", "detail": "脚本模型每轮都发工具调用、永不自然结束" },
+      "expect": { "assert": ["termination reason=step_limit", "最终走收敛流（FakeLLM.converged=True）"] },
+      "status": "automated:t_tools_metrics.py@场景F｜步数上限：达 MAX_STEPS 强制收敛（step_limit）",
+      "origin": "继承老 G04（步数上限强制收敛）"
+    },
+    {
+      "id": "G05",
+      "title": "工具连续失败弃用降级（第 3 次短路）",
+      "measure": "同一工具连续失败 3 次后不再执行执行器、直接喂回『请改用其他工具』观测（错误即数据、主循环不中断）",
+      "setup": { "type": "inject_tool", "detail": "注入必抛错假工具，脚本模型连续 3 次调用" },
+      "expect": { "assert": ["执行器实际执行 2 次，第 3 次短路", "第 3 次 result_summary=连续失败、latency=0"] },
+      "status": "automated:t_errors.py@agent 联动｜连续失败 3 次后弃用（第 3 次短路，不再执行）",
+      "origin": "继承老 G05（工具故障降级）"
+    },
+    {
+      "id": "G06",
+      "title": "云端调用故障 → 友好文本降级（不崩）",
+      "measure": "模型调用抛错时 stream_answer 捕获、以『调用模型失败…请稍后重试』面向用户收口，不把异常抛穿调用方",
+      "setup": { "type": "fake_llm_rounds", "detail": "patch get_llm 的 astream 抛 RuntimeError → stream_answer" },
+      "expect": { "assert": ["产出含『调用模型失败』『请稍后重试』的文本", "不抛异常到调用方之外"] },
+      "status": "automated:t_grounding.py@降级友好文本｜模型调用失败转提示文本（不抛异常）",
+      "origin": "老 G06 为『手工改非法 Key』；现离线可锁，转 automated"
+    },
+    {
+      "id": "G07",
+      "title": "LLM 返回空 / None chunk 的终止路径",
+      "measure": "整轮无任何 chunk（gathered 为 None）时置 error 终止并转入强制收敛占位，不虚构正文、不抛异常",
+      "setup": { "type": "fake_llm_rounds", "detail": "单轮空 chunk 脚本（rounds=[[]]）驱动 run_agent" },
+      "expect": { "assert": ["termination reason=error", "无虚构正文（仅收敛占位文本）"] },
+      "status": "automated:t_grounding.py@无 chunk 轮｜gathered 为空走 error 终止（不抛异常）",
+      "origin": "继承老 G07（LLM 返回 None chunk）"
+    },
+    {
+      "id": "G08",
+      "title": "usage 缺失时 input_tokens=0 守卫不污染记账",
+      "measure": "模型未回传 usage（tokens_in=0）时 note_input_tokens 守卫跳过，不把 last_input_tokens 覆盖为 0（否则自动整理触发判定被清零掩盖）",
+      "setup": { "type": "fake_llm_rounds", "detail": "chunk 不带 usage_metadata，先置 last_input_tokens=5000" },
+      "expect": { "assert": ["run_agent 后 last_input_tokens 仍为 5000"] },
+      "status": "automated:t_grounding.py@usage 缺失｜tokens_in=0 守卫不覆盖记账",
+      "origin": "新增（老体系从未锁）"
+    }
+  ]
+}

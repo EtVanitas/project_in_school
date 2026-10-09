@@ -1,0 +1,65 @@
+{
+  "meta": {
+    "suite": "observability",
+    "dimension": "可观测与埋点",
+    "desc": "测事件字段完备性、埋点失败静默、tool_steps 只含真工具口径、双层落库一致、指标可复算：观测数据既是排查依据又不反噬热路径。status 三态：automated:<文件>.py@<用例标题> / manual:<操作指引> / gap:<说明>。",
+    "version": "v0.9",
+    "updated": "2026-10-09"
+  },
+  "cases": [
+    {
+      "id": "O01",
+      "title": "事件字段完备（tool_start / tool_end / retract / termination）",
+      "measure": "SSE 各事件的必备字段契约齐全（call_id / ok / result_summary / text / reason 等），前端与落库有稳定消费面",
+      "setup": { "type": "unit", "detail": "二期事件契约用例（字段完备性断言）" },
+      "expect": { "assert": ["四类事件各含约定字段"] },
+      "status": "automated:test_phase2_contracts.py@事件契约：tool_start/tool_end/retract/termination 字段完备",
+      "origin": "继承二期事件契约"
+    },
+    {
+      "id": "O02",
+      "title": "埋点写失败不阻断主流程（热路径安全）",
+      "measure": "record_event / note_input_tokens 内部 try/except 吞异常仅告警：观测写失败绝不影响一次正常问答",
+      "setup": { "type": "unit", "detail": "patch db._execute 抛错后直调两函数" },
+      "expect": { "assert": ["record_event 不抛", "note_input_tokens 不抛"] },
+      "status": "automated:t_grounding.py@埋点写失败静默｜record_event / note_input_tokens 不阻断热路径",
+      "origin": "继承老 O 类（埋点不阻断）"
+    },
+    {
+      "id": "O03",
+      "title": "tool_steps 只含真工具口径（护栏空观测不落库）",
+      "measure": "工具总量护栏命中的超限调用只补配对、不发 tool_start/tool_end → 不进 _persist_step 落 tool_steps；轨迹表只记真实执行",
+      "setup": { "type": "fake_llm_rounds", "detail": "顶满 MAX_TOOL_CALLS，数 tool_start 是否恰为上限值" },
+      "expect": { "assert": ["tool_start 数量 = MAX_TOOL_CALLS（超限调用不产事件）"] },
+      "status": "automated:t_grounding.py@工具总量护栏｜达 MAX_TOOL_CALLS 空观测配对后强制收敛（tool_limit）",
+      "origin": "新增（观测口径纯度）"
+    },
+    {
+      "id": "O04",
+      "title": "指标可复算（复用 / 失败与事件数对账）",
+      "measure": "同参复用「2 次调用 1 次执行」等指标与事件计数一致，[METRIC] 可由原始事件复算",
+      "setup": { "type": "fake_llm_rounds", "detail": "工具指标场景 C（复用命中零时延）" },
+      "expect": { "assert": ["cached 命中的 tool_end latency=0", "调用数 / 执行数比与指标一致"] },
+      "status": "automated:t_tools_metrics.py@场景C｜同参复用：2 次调用 1 次执行（命中零时延）",
+      "origin": "继承工具调用指标套件"
+    },
+    {
+      "id": "O05",
+      "title": "双层落库一致（模型层可回放续接）",
+      "measure": "轮级原子写：assistant(含 tool_calls)+tool 结果同事务落 model_messages，配对完整可回放续接（断连整轮不写）",
+      "setup": { "type": "unit", "detail": "二期轮级原子写用例" },
+      "expect": { "assert": ["assistant.tool_calls 与 tool 条目配对", "可经 build_model_context 回放"] },
+      "status": "automated:test_phase2_contracts.py@轮级原子写：model_messages 可回放续接（assistant 工具调用 + tool 配对）",
+      "origin": "继承二期双层落库契约"
+    },
+    {
+      "id": "O06",
+      "title": "身份链落库（tool_end → tool_steps 配对）",
+      "measure": "tool_start 载荷按 call_id 缓存，tool_end 到位即经 _persist_step 落 tool_steps（call_id/message_id 随事件即达）",
+      "setup": { "type": "unit", "detail": "二期身份链用例（starts 缓存配对落库）" },
+      "expect": { "assert": ["tool_steps.call_id 与事件一致", "message_id 归属正确"] },
+      "status": "automated:test_phase2_contracts.py@身份链：tool_end 经 starts 缓存配对落 tool_steps",
+      "origin": "继承二期身份链契约"
+    }
+  ]
+}

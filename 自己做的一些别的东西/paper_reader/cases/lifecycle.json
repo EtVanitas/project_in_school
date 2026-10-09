@@ -1,0 +1,83 @@
+{
+  "meta": {
+    "suite": "lifecycle",
+    "dimension": "数据生命周期",
+    "desc": "测删除级联、状态机残稿、建表幂等、水位换代残段、并发轮次序号等生命周期不变量：文档/对话/消息/轨迹/模型层在增删与降级时保持一致，历史归档不被误清。status 三态：automated:<文件>.py@<用例标题> / manual:<操作指引> / gap:<说明>。",
+    "version": "v0.9",
+    "updated": "2026-10-09"
+  },
+  "cases": [
+    {
+      "id": "L01",
+      "title": "删论文级联清三表（chat / model / tool_steps）",
+      "measure": "delete_document 按 doc→conversations→chat_messages/tool_steps/model_messages 级联删除，PDF 一并清除，不留孤儿行",
+      "setup": { "type": "temp_db", "detail": "造一次性文档+对话+三表数据后 delete_document，查三表" },
+      "expect": { "assert": ["list_chat_messages / list_tool_steps / list_model_messages 均空", "get_conversation / get_document 为 None"] },
+      "status": "automated:t_lifecycle.py@delete_document 级联｜chat/model/tool_steps 三表清空且对话消失",
+      "origin": "新增（级联清理完整性）"
+    },
+    {
+      "id": "L02",
+      "title": "删对话后笔记保留（笔记与文档生命周期解耦）",
+      "measure": "笔记为独立文件（arxiv_id.md），删文档不清笔记——历史讨论沉淀不随论文删除丢失",
+      "setup": { "type": "temp_db", "detail": "delete 用例内先写该文档笔记，删文档后查笔记仍在" },
+      "expect": { "assert": ["delete_document 后 get_note(arxiv_id) 非 None"] },
+      "status": "automated:t_lifecycle.py@delete_document 级联｜chat/model/tool_steps 三表清空且对话消失",
+      "origin": "新增（解耦边界）"
+    },
+    {
+      "id": "L03",
+      "title": "init_db 幂等且已删列不复活",
+      "measure": "重复调用建表不报错、列集合与精简 schema 一致（v0.9 已删的旧列不因 CREATE 语句回潮）",
+      "setup": { "type": "unit", "detail": "多次 init_db + PRAGMA table_info 比对" },
+      "expect": { "assert": ["重复 init_db 无异常", "列集合与 _SCHEMA 一致"] },
+      "status": "automated:test_phase2_contracts.py@init_db 建表幂等：重复调用不报错且列集合与精简 schema 一致",
+      "origin": "继承老 L 类（建表幂等）"
+    },
+    {
+      "id": "L04",
+      "title": "水位换代残段被下次整理吃掉",
+      "measure": "整理提交顺序为写笔记→推水位→删条目：删条目失败仅留残段，水位已前推，下次整理一并清除、不重复追加",
+      "setup": { "type": "manual_env", "detail": "整理契约 T2.2 幂等（残留段场景）" },
+      "expect": { "assert": ["残留段下次整理清除", "Q/A 不重复追加、水位只前推"] },
+      "status": "automated:test_memory_organize.py@T2.2 幂等：删段失败不重复追加 Q/A、水位只前推；残留段下次整理一并清除",
+      "origin": "继承 v0.9 整理契约 T2.2"
+    },
+    {
+      "id": "L05",
+      "title": "partial 残稿不进模型层",
+      "measure": "断连时显示层可存 partial 残稿供回看；模型层只在轮末 append_model_turn 原子写，半轮不进模型上下文（防污染续接）",
+      "setup": { "type": "temp_db", "detail": "add_chat_message(status=partial) 后查模型层为空，显式 append_model_turn 后才有" },
+      "expect": { "assert": ["partial 显示层行存在", "未写轮次时 model_messages 为空"] },
+      "status": "automated:t_lifecycle.py@partial 残稿口径｜显示层可存 partial、模型层只在轮末原子写",
+      "origin": "新增（双层落库解耦）"
+    },
+    {
+      "id": "L06",
+      "title": "并发轮次 seq 单调不复用",
+      "measure": "_next_seq 以「现有最大 seq 与整理水位」较大者为基准：整理清账（条目删而水位留）后新条目 seq 仍严格大于水位、不复用",
+      "setup": { "type": "temp_db", "detail": "写 3 条→推水位 3→清空表→再写，断言 seq=4" },
+      "expect": { "assert": ["清账后新 seq > 水位（不复用 1）"] },
+      "status": "automated:t_lifecycle.py@并发轮次｜_next_seq 以整理水位为基准 seq 单调不复用",
+      "origin": "新增（序号水位基准）"
+    },
+    {
+      "id": "L07",
+      "title": "retrieve 零命中 / 关闭态不抛异常",
+      "measure": "need_retrieval=False 直接返回空块；检索异常转 failed 标记交 Agent 自救——retrieve 节点恒不向上抛",
+      "setup": { "type": "unit", "detail": "graph.retrieve_node({'need_retrieval':False,...}) 直调" },
+      "expect": { "assert": ["返回 {'chunks':[]}", "不抛异常"] },
+      "status": "automated:t_lifecycle.py@retrieve 预判放行｜need_retrieval=False 直接空块、节点不抛异常",
+      "origin": "新增（节点健壮性）"
+    },
+    {
+      "id": "L08",
+      "title": "整理幂等再入（无增量 unchanged）",
+      "measure": "organize_conversation 在无增量（seq>水位为空）时提前返回 unchanged=True、不触模型、不前推水位",
+      "setup": { "type": "temp_db", "detail": "空模型层对话上 organize_conversation" },
+      "expect": { "assert": ["返回 unchanged=True", "organized_seq 不变、无异常"] },
+      "status": "automated:t_lifecycle.py@整理幂等｜无增量再入 unchanged=True、水位不前推",
+      "origin": "新增（再入安全）"
+    }
+  ]
+}
